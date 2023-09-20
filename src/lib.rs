@@ -5,11 +5,11 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{parse::Parse, FnArg, ItemFn, Token, Type};
 
-struct FuckingOutputType {
+struct ReturnType {
     ty: Type,
 }
 
-impl Parse for FuckingOutputType {
+impl Parse for ReturnType {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         input.parse::<Token![->]>()?;
 
@@ -38,7 +38,7 @@ pub fn cached(_attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let fake_output = &funcdef.sig.output;
 
-    let output = syn::parse2::<FuckingOutputType>(quote! { #fake_output })
+    let output = syn::parse2::<ReturnType>(quote! { #fake_output })
         .unwrap()
         .ty;
 
@@ -79,34 +79,22 @@ pub fn cached(_attr: TokenStream, input: TokenStream) -> TokenStream {
 
             println!("Initialized tracker locker!");
 
-            match #tracker_lower.read() {
-                Ok(maybe_tracker) => match maybe_tracker.cache {
-                    Some(_) => (),
-                    None => {
-                        let mut tracker = #tracker_lower.write().unwrap();
-                        tracker.cache = Some(std::collections::HashMap::new());
-                        println!("Initialized tracker!");
-                    }
-                }
-                Err(_) => {
-                    panic!("Failed to get lock on cache.");
-                }
+            let mut tracker = #tracker_lower.write().unwrap();
+            match tracker.cache {
+                Some(_) => (),
+                None => tracker.cache = Some(std::collections::HashMap::new()),
             };
+
+            println!("Initalized cache!");
 
             let key = #signature { #(#just_names),* };
 
-            match #tracker_lower.read() {
-                Ok(tracker) => match tracker.cache.as_ref().unwrap().get(&key) {
-                    Some(value) => *value,
-                    None => {
-                        let value = #block;
-                        let mut tracker = #tracker_lower.write().unwrap();
-                        tracker.cache.as_mut().unwrap().insert(key, value.clone());
-                        value
-                    }
-                },
-                Err(_) => {
-                    panic!("Failed to get lock on cache.");
+            match tracker.cache.as_ref().unwrap().get(&key) {
+                Some(value) => *value,
+                None => {
+                    let value = #block;
+                    tracker.cache.as_mut().unwrap().insert(key, value.clone());
+                    value
                 }
             }
         }
