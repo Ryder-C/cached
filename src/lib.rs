@@ -79,20 +79,31 @@ pub fn cached(_attr: TokenStream, input: TokenStream) -> TokenStream {
 
             println!("Initialized tracker locker!");
 
-            let mut tracker = #tracker_lower.write().unwrap();
-            match tracker.cache {
-                Some(_) => (),
-                None => tracker.cache = Some(std::collections::HashMap::new()),
-            };
+            {
+                let mut tracker = #tracker_lower.try_write().unwrap();
+                match tracker.cache {
+                    Some(_) => (),
+                    None => tracker.cache = Some(std::collections::HashMap::new()),
+                };
+            }
 
             println!("Initalized cache!");
 
             let key = #signature { #(#just_names),* };
 
-            match tracker.cache.as_ref().unwrap().get(&key) {
+            let entry = {
+                let _tracker = #tracker_lower.read().unwrap();
+                let _cache = _tracker.cache.as_ref().unwrap();
+                let res = _cache.get(&key).clone();
+                _tracker; // Prevents the tracker from being dropped
+                res
+            };
+
+            match entry {
                 Some(value) => *value,
                 None => {
                     let value = #block;
+                    let mut tracker = #tracker_lower.write().unwrap();
                     tracker.cache.as_mut().unwrap().insert(key, value.clone());
                     value
                 }
